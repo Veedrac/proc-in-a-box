@@ -51,11 +51,13 @@ const engine = (function () {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     }
-    module.initialize = function(img) {
-        const [wireStates, incomingWires, incomingWireGroups, imageDecoder, imageDecoderExtra] = decode.bootstrapFromImageTag(img);
+    module.initialize = async function(img) {
+        const [wireStates, incomingWires, incomingWireGroupsOff, incomingWireGroupsLen, imageDecoder, imageDecoderExtra] =
+            await decode.bootstrapFromImageTag(img);
         window.wireStates = wireStates;
         window.incomingWires = incomingWires;
-        window.incomingWireGroups = incomingWireGroups;
+        window.incomingWireGroupsOff = incomingWireGroupsOff;
+        window.incomingWireGroupsLen = incomingWireGroupsLen;
         window.imageDecoder = imageDecoder;
         window.imageDecoderExtra = imageDecoderExtra;
         const [width, height] = [img.naturalWidth, img.naturalHeight];
@@ -75,15 +77,18 @@ const engine = (function () {
         gl.disable(gl.BLEND);
 
         const renderProgram = createProgram(gl, "vs", "render-fs");
-        const a_quadCoordinates     = gl.getAttribLocation (renderProgram, "a_quadCoordinates");
+        const a_triangleCoordinates = gl.getAttribLocation (renderProgram, "a_triangleCoordinates");
+        const u_render_scale        = gl.getUniformLocation(renderProgram, "u_scale");
+        const u_render_offset       = gl.getUniformLocation(renderProgram, "u_offset");
         const u_render_wireStates   = gl.getUniformLocation(renderProgram, "u_wireStates");
         const u_render_imageDecoder = gl.getUniformLocation(renderProgram, "u_imageDecoder");
         const u_render_imageDecoderExtra = gl.getUniformLocation(renderProgram, "u_imageDecoderExtra");
 
         const stepProgram = createProgram(gl, "vs", "step-fs");
-        const u_step_wireStates         = gl.getUniformLocation(stepProgram, "u_wireStates");
-        const u_step_incomingWires      = gl.getUniformLocation(stepProgram, "u_incomingWires");
-        const u_step_incomingWireGroups = gl.getUniformLocation(stepProgram, "u_incomingWireGroups");
+        const u_step_wireStates     = gl.getUniformLocation(stepProgram, "u_wireStates");
+        const u_step_incomingWires  = gl.getUniformLocation(stepProgram, "u_incomingWires");
+        const u_step_incomingWireGroupsOff = gl.getUniformLocation(stepProgram, "u_incomingWireGroupsOff");
+        const u_step_incomingWireGroupsLen = gl.getUniformLocation(stepProgram, "u_incomingWireGroupsLen");
         const framebuffer = gl.createFramebuffer(gl.FRAMEBUFFER);
 
         gl.activeTexture(gl.TEXTURE0 + 0);
@@ -102,29 +107,37 @@ const engine = (function () {
         textureDisableInterpolation();
 
         gl.activeTexture(gl.TEXTURE0 + 3);
-        const incomingWireGroupsTex = textureCreateAndBind([2048, incomingWireGroups.length >> 11], gl.R32I, gl.RED_INTEGER, gl.INT, incomingWireGroups);
-        const incomingWireGroupsIdx = 3;
+        const incomingWireGroupsOffTex = textureCreateAndBind([128, incomingWireGroupsOff.length >> 7], gl.R32I, gl.RED_INTEGER, gl.INT, incomingWireGroupsOff);
+        const incomingWireGroupsOffIdx = 3;
         textureDisableInterpolation();
 
         gl.activeTexture(gl.TEXTURE0 + 4);
-        let wireStatesCurrTex = textureCreateAndBind([128, wireStates.length >> 7], gl.R8UI, gl.RED_INTEGER, gl.UNSIGNED_BYTE, new Uint8Array(wireStates));
-        let wireStatesCurrIdx = 4;
+        const incomingWireGroupsLenTex = textureCreateAndBind([1024, incomingWireGroupsLen.length >> 10], gl.R8UI, gl.RED_INTEGER, gl.UNSIGNED_BYTE, incomingWireGroupsLen);
+        const incomingWireGroupsLenIdx = 4;
         textureDisableInterpolation();
 
         gl.activeTexture(gl.TEXTURE0 + 5);
+        let wireStatesCurrTex = textureCreateAndBind([128, wireStates.length >> 7], gl.R8UI, gl.RED_INTEGER, gl.UNSIGNED_BYTE, new Uint8Array(wireStates));
+        let wireStatesCurrIdx = 5;
+        textureDisableInterpolation();
+
+        gl.activeTexture(gl.TEXTURE0 + 6);
         let wireStatesNextTex = textureCreateAndBind([128, wireStates.length >> 7], gl.R8UI, gl.RED_INTEGER, gl.UNSIGNED_BYTE, null);
-        let wireStatesNextIdx = 5;
+        let wireStatesNextIdx = 6;
         textureDisableInterpolation();
 
         const triangleCovering = new Float32Array([
-            -1.0, -1.0,   1.0, -1.0,  -1.0,  1.0,
-            -1.0,  1.0,   1.0, -1.0,   1.0,  1.0,
+            -1.0, -1.0,   3.0, -1.0,  -1.0,  3.0,
         ]);
         const triangleCoveringBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, triangleCoveringBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, triangleCovering, gl.STATIC_DRAW);
-        gl.vertexAttribPointer(a_quadCoordinates, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(a_quadCoordinates);
+        gl.vertexAttribPointer(a_triangleCoordinates, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(a_triangleCoordinates);
+
+        let scale = 1;
+        let mul = 1.003;
+        let offset = 0;
 
         function animate(now) {
             requestAnimationFrame(animate);
@@ -133,16 +146,27 @@ const engine = (function () {
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.viewport(0, 0, width, height);
+            gl.uniform1f(u_render_scale, scale);
+            gl.uniform2f(u_render_offset, offset, offset);
             gl.uniform1i(u_render_wireStates, wireStatesCurrIdx);
             gl.uniform1i(u_render_imageDecoder, imageDecoderIdx);
             gl.uniform1i(u_render_imageDecoderExtra, imageDecoderExtraIdx);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+            offset += 4 * scale;
+            scale *= mul;
+            if (scale > 1) {
+                mul = 0.9999 / mul;
+            } else if (scale < 0.1) {
+                mul = 1.0001 / mul;
+            }
 
             gl.useProgram(stepProgram);
             gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
             gl.viewport(0, 0, 128, wireStates.length >> 7);
             gl.uniform1i(u_step_incomingWires, incomingWiresIdx);
-            gl.uniform1i(u_step_incomingWireGroups, incomingWireGroupsIdx);
+            gl.uniform1i(u_step_incomingWireGroupsOff, incomingWireGroupsOffIdx);
+            gl.uniform1i(u_step_incomingWireGroupsLen, incomingWireGroupsLenIdx);
         }
 
         let sync = [];
@@ -160,7 +184,7 @@ const engine = (function () {
 
                 gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, wireStatesNextTex, 0);
                 gl.uniform1i(u_step_wireStates, wireStatesCurrIdx);
-                gl.drawArrays(gl.TRIANGLES, 0, 6);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
 
                 [wireStatesCurrTex, wireStatesNextTex] = [wireStatesNextTex, wireStatesCurrTex];
                 [wireStatesCurrIdx, wireStatesNextIdx] = [wireStatesNextIdx, wireStatesCurrIdx];

@@ -1,5 +1,34 @@
 "use strict";
 
+// From https://dbaron.org/log/20100309-faster-timeouts
+(function() {
+    var timeouts = [];
+    var messageName = "zero-timeout-message";
+
+    // Like setTimeout, but only takes a function argument.  There's
+    // no time argument (always zero) and no arguments (you have to
+    // use a closure).
+    function setZeroTimeout(fn) {
+        timeouts.push(fn);
+        window.postMessage(messageName, "*");
+    }
+
+    function handleMessage(event) {
+        if (event.source === window && event.data === messageName) {
+            event.stopPropagation();
+            if (timeouts.length > 0) {
+                const fn = timeouts.shift();
+                fn();
+            }
+        }
+    }
+
+    window.addEventListener("message", handleMessage, true);
+
+    // Add the one thing we want added to the window object.
+    window.setZeroTimeout = setZeroTimeout;
+})();
+
 const decode = (function () {
     const module = {};
 
@@ -35,7 +64,11 @@ const decode = (function () {
         return 0b00;
     }
 
-    function imageToGpuRepresentation(data, width, height, numWires) {
+    function sleep(ms) {
+      return new Promise(resolve => setZeroTimeout(resolve));
+    }
+
+    async function imageToGpuRepresentation(data, width, height, numWires) {
         // Loops aside, trace *only* from ends.
         // No stack is needed for this, since it's always a
         // single one-way traversal.
@@ -70,7 +103,8 @@ const decode = (function () {
         // TODO
         let incomingWiresN = 0;
         const incomingWires = new Int32Array(numWires * 2);
-        const incomingWireGroups = new Int32Array(numWires * 2);
+        const incomingWireGroupsOff = new Int32Array(numWires >> 3);
+        const incomingWireGroupsLen = new Uint8Array(numWires);
 
         // Which wire does each pixel get its value from?
         const imageDecoder = new Int32Array(size);
@@ -93,7 +127,9 @@ const decode = (function () {
             // End #1
             let wireActive = (kind >> 1) & (numSiblings != 3);
             imageDecoder[i + j * width] = wireStatesN;
-            incomingWireGroups[wireStatesN * 2] = incomingWiresN;
+            if ((wireStatesN & 7) == 0) {
+                incomingWireGroupsOff[wireStatesN >> 3] = incomingWiresN;
+            }
 
             let [m, n] = [i, j];
             let [dm, dn] = [0, 0];
@@ -108,14 +144,14 @@ const decode = (function () {
                 else if (down)  { dn = +1; }
                 else if (left)  { dm = -1; }
                 else if (right) { dm = +1; }
-                else            { debugger; }
+                else            { throw 1; }
             } else {
                 // Go away from the empty pixel
                 if      (!up)    { dn = +1; }
                 else if (!down)  { dn = -1; }
                 else if (!left)  { dm = +1; }
                 else if (!right) { dm = -1; }
-                else             { debugger; }
+                else             { throw 2; }
             }
 
             while (true) {
@@ -135,11 +171,11 @@ const decode = (function () {
                     } else if (left) {
                         incomingWires[incomingWiresN] = mnIdx;
                         incomingWiresN++;
-                        incomingWireGroups[wireStatesN * 2 + 1]++;
+                        incomingWireGroupsLen[wireStatesN]++;
                     } else if (right) {
                         incomingWires[incomingWiresN] = mnIdx;
                         incomingWiresN++;
-                        incomingWireGroups[wireStatesN * 2 + 1]++;
+                        incomingWireGroupsLen[wireStatesN]++;
                     } else {
                         wireActive |= data[(m + 1) + (n + 1) * (width + 2)] >> 1;
                         imageDecoder[mnIdx] = wireStatesN;
@@ -174,6 +210,11 @@ const decode = (function () {
 
                 traverseFrom(data, width, height, i, j);
             }
+
+            if (j % 10 == 0) {
+                document.getElementById("fps").innerHTML = j;
+                await sleep(0);
+            }
         }
 
         function traverseLoopsFrom(data, width, height, i, j) {
@@ -187,21 +228,23 @@ const decode = (function () {
 
             if (numSiblings !== 2) {
                 // Only loops should be missing!
-                debugger;
+                throw 3;
             }
 
             // Loop "start"; stop when reached again.
             let wireActive = kind >> 1;
             imageDecoder[i + j * width] = wireStatesN;
-            incomingWireGroups[wireStatesN * 2] = incomingWiresN;
+            if ((wireStatesN & 7) == 0) {
+                incomingWireGroupsOff[wireStatesN >> 3] = incomingWiresN;
+            }
 
             let [m, n] = [i, j];
             let [dm, dn] = [0, 0];
 
             // Any side will do right now.
-            if      (up)   { dn = +1; }
-            else if (down) { dn = -1; }
-            else           { dm = +1; }
+            if      (up)   { dn = -1; }
+            else if (down) { dn = +1; }
+            else           { dm = -1; }
 
             while (true) {
                 [m, n] = [m + dm, n + dn];
@@ -227,18 +270,18 @@ const decode = (function () {
                     } else if (left) {
                         incomingWires[incomingWiresN] = mnIdx;
                         incomingWiresN++;
-                        incomingWireGroups[wireStatesN * 2 + 1]++;
+                        incomingWireGroupsLen[wireStatesN]++;
                     } else if (right) {
                         incomingWires[incomingWiresN] = mnIdx;
                         incomingWiresN++;
-                        incomingWireGroups[wireStatesN * 2 + 1]++;
+                        incomingWireGroupsLen[wireStatesN]++;
                     } else {
                         wireActive |= data[(m + 1) + (n + 1) * (width + 2)] >> 1;
                         imageDecoder[mnIdx] = wireStatesN;
                     }
                 } else if (left === right) {
                     // Impossibru!
-                    debugger;
+                    throw 4;
                 } else {
                     wireActive |= data[(m + 1) + (n + 1) * (width + 2)] >> 1;
                     imageDecoder[mnIdx] = wireStatesN
@@ -262,23 +305,30 @@ const decode = (function () {
 
                 traverseLoopsFrom(data, width, height, i, j);
             }
+
+            if (j % 10 == 0) {
+                document.getElementById("fps").innerHTML = j;
+                await sleep(0);
+            }
         }
 
         for (let i = 0; i < incomingWiresN; i++) {
             incomingWires[i] = imageDecoder[incomingWires[i]];
         }
 
+        let groupStart = 0;
         for (let i = 0; i < wireStatesN; i++) {
-            let groupStart = incomingWireGroups[i * 2];
-            let groupLength = incomingWireGroups[i * 2 + 1];
+            let groupLength = incomingWireGroupsLen[i];
 
             let incoming = incomingWires.slice(groupStart, groupStart + groupLength);
             incoming.sort();
             incomingWires.set(incoming, groupStart);
+
+            groupStart += groupLength;
         }
 
         // Round up to multiple of width so we can have less-skew textures.
-        const packedWireStatesN = (wireStatesN / 8 + 1023) & ~1023;
+        const packedWireStatesN = ((wireStatesN >> 3) + 1023) & ~1023;
         wireStatesN = (wireStatesN + 1023) & ~1023;
         incomingWiresN = (incomingWiresN + 1023) & ~1023;
 
@@ -292,7 +342,8 @@ const decode = (function () {
         return [
             packedWireStates,
             incomingWires.slice(0, incomingWiresN),
-            incomingWireGroups.slice(0, wireStatesN * 2),
+            incomingWireGroupsOff.slice(0, wireStatesN >> 3),
+            incomingWireGroupsLen.slice(0, wireStatesN),
             imageDecoder, imageDecoderExtra
         ];
     }
