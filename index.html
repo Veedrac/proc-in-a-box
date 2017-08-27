@@ -30,7 +30,7 @@
             int subidx = idx & 7;
             idx >>= 3;
 
-            return (texelFetch(u_wireStates, ivec2(idx & 127, idx >> 7), 0).r & (uint(1) << subidx)) > uint(0);
+            return (texelFetch(u_wireStates, ivec2(idx & 127, idx >> 7), 0).r & (1u << subidx)) > 0u;
         }
 
         void main() {
@@ -90,7 +90,7 @@
             int x = int(gl_FragCoord.x) << 3;
             int y = int(gl_FragCoord.y);
 
-            color = uint(0);
+            color = 0u;
 
             int wireGroup   = int(texelFetch(u_incomingWireGroupsOff, ivec2(x >> 3, y), 0).r);
             for (int subwire = 0; subwire < 8; subwire++, x++) {
@@ -104,8 +104,8 @@
                     wireIdx >>= 3;
 
                     uint texel = texelFetch(u_wireStates, ivec2(wireIdx & 127, wireIdx >> 7), 0).r;
-                    if (!((texel & (uint(1) << subidx)) > uint(0))) {
-                        color |= uint(1) << subwire;
+                    if (!((texel & (1u << subidx)) > 0u)) {
+                        color |= 1u << subwire;
                         break;
                     }
                 }
