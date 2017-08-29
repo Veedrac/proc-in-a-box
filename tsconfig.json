@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "outFile": "src/tutorial.js",
+        "module": "system",
+        "target": "esnext",
+        "noImplicitAny": true,
+        "removeComments": true,
+        "alwaysStrict": true,
+        "sourceMap": true
+    },
+    "files": [
+        "src/tutorial.ts",
+        "src/definitions.ts"
+    ]
+}

@@ -1,0 +1,10 @@
+{
+    "name": "proc-in-a-box",
+    "author": "Joshua Landau",
+    "version": "0.0.1",
+    "main": "./src/tutorial.ts",
+    "types": "./src/definitions.d.ts",
+    "dependencies": {
+        "@types/webgl2": "0.0.2"
+    }
+}

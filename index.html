@@ -1,123 +1,6 @@
 <html>
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-
-        <script id="vs" type="x-shader/x-vertex">
-        #version 300 es
-
-        precision mediump float;
-        in vec2 a_triangleCoordinates;
-
-        void main() {
-          gl_Position = vec4(a_triangleCoordinates, 0, 1);
-        }
-        </script>
-
-        <script id="render-fs" type="x-shader/x-fragment">
-        #version 300 es
-        precision mediump float;
-        precision mediump int;
-
-        uniform highp float u_scale;
-        uniform highp vec2 u_offset;
-
-        uniform lowp usampler2D u_wireStates;
-        uniform mediump isampler2D u_imageDecoder;
-        uniform mediump isampler2D u_imageDecoderExtra;
-        out vec4 color;
-
-        bool wireState(int idx) {
-            int subidx = idx & 7;
-            idx >>= 3;
-
-            return (texelFetch(u_wireStates, ivec2(idx & 127, idx >> 7), 0).r & (1u << subidx)) > 0u;
-        }
-
-        void main() {
-            vec2 where = gl_FragCoord.xy * u_scale + u_offset;
-            int x = int(where.x);
-            int y = int(where.y);
-
-            int wireIdx1 = texelFetch(u_imageDecoder, ivec2(x, y), 0).r;
-            if (wireIdx1 == 0) {
-                if ((x & 31) == 0 || (y & 31) == 0) {
-                    color = vec4(0.9, 0.9, 0.9, 1);
-                    return;
-                } else {
-                    color = vec4(1.0, 1.0, 1.0, 1);
-                    return;
-                }
-            }
-
-            int wireOn = wireState(wireIdx1) ? 1 : 0;
-            int wireIdx2 = texelFetch(u_imageDecoderExtra, ivec2(x, y), 0).r;
-            if (wireIdx2 == 0) {
-                if (wireOn == 1) {
-                    color = vec4(1.0, 0.0, 0.0, 1);
-                    return;
-                } else {
-                    color = vec4(0.0, 0.5, 1.0, 1);
-                    return;
-                }
-            }
-
-            wireOn += wireState(wireIdx2) ? 1 : 0;
-            if (wireOn == 2) {
-                color = vec4(1.0, 0, 0, 1);
-                return;
-            } else if (wireOn == 1) {
-                color = vec4(0.71, 0.35, 0.71, 1);
-                return;
-            } else {
-                color = vec4(0.0, 0.5, 1.0, 1);
-                return;
-            }
-        }
-        </script>
-
-        <script id="step-fs" type="x-shader/x-fragment">
-        #version 300 es
-        precision mediump float;
-
-        uniform lowp usampler2D u_wireStates;
-        uniform mediump isampler2D u_incomingWires;
-        uniform mediump isampler2D u_incomingWireGroupsOff;
-        uniform lowp    usampler2D u_incomingWireGroupsLen;
-
-        out lowp uint color;
-
-        void main() {
-            int x = int(gl_FragCoord.x) << 3;
-            int y = int(gl_FragCoord.y);
-
-            color = 0u;
-
-            int wireGroup   = int(texelFetch(u_incomingWireGroupsOff, ivec2(x >> 3, y), 0).r);
-            for (int subwire = 0; subwire < 8; subwire++, x++) {
-                int groupLength = int(texelFetch(u_incomingWireGroupsLen, ivec2(x, y), 0).r);
-
-                for (int i = 0; i < groupLength; i++) {
-                    int idx = wireGroup + i;
-                    int wireIdx = texelFetch(u_incomingWires, ivec2(idx & 1023, idx >> 10), 0).r;
-
-                    int subidx = wireIdx & 7;
-                    wireIdx >>= 3;
-
-                    uint texel = texelFetch(u_wireStates, ivec2(wireIdx & 127, wireIdx >> 7), 0).r;
-                    if (!((texel & (1u << subidx)) > 0u)) {
-                        color |= 1u << subwire;
-                        break;
-                    }
-                }
-
-                wireGroup += groupLength;
-            }
-        }
-        </script>
-
-        <script defer src="src/decode.js"></script>
-        <script defer src="src/engine.js"></script>
-        <script defer src="src/tutorial.js"></script>
         <link rel="stylesheet" type="text/css" href="src/tutorial.css">
     </head>
     <body>
@@ -127,5 +10,14 @@
         <!-- <img class="linelogic" src="machines/ashley-oisc.png"></img> -->
         <img class="linelogic" src="machines/ashley-oisc-ultra.png"></img>
         <!-- <img class="linelogic" src="machines/random.png"></img> -->
+
+        <script src="src/utils/system.js"></script>
+        <script src="src/tutorial.js"></script>
+        <script>SystemJS.import('tutorial');</script>
+        <!-- <script defer src="src/utils/setZeroTimeout.js"></script> -->
+        <!-- <script defer src="src/backends/gpu.js"></script> -->
+        <!-- <script defer src="src/backends/gpu-wires-decoder.js"></script> -->
+        <!-- <script defer src="src/backends/gpu-wires-renderer.js"></script> -->
+        <!-- <script defer src="src/engine.js"></script> -->
     </body>
 </html>
