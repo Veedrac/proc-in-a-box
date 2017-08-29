@@ -15,7 +15,7 @@ function handleMessage(event: MessageEvent) {
     if (event.source === window && event.data === messageName) {
         event.stopPropagation();
         if (timeouts.length > 0) {
-            const fn = timeouts.shift();
+            let fn = timeouts.shift()!;
             fn();
         }
     }

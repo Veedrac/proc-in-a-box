@@ -87,7 +87,7 @@ async function imageToGpuRepresentation(data: Uint8Array, width: number, height:
     // at most once every four wires.
     const imageDecoderExtra = new Uint32Array(Math.ceil(size >> 2));
 
-    function traverseFrom(data: Uint8Array, width: number, height: number, i: number, j: number) {
+    function traverseFrom(data: Uint8Array, width: number, i: number, j: number) {
         const idx = (i + 1) + (j + 1) * (width + 2);
         const kind  = data[idx];
         const up    = data[idx - (width + 2)] & 1;
@@ -188,16 +188,17 @@ async function imageToGpuRepresentation(data: Uint8Array, width: number, height:
                 continue;
             }
 
-            traverseFrom(data, width, height, i, j);
+            traverseFrom(data, width, i, j);
         }
 
         if (j % 10 == 0) {
-            document.getElementById("fps").innerHTML = j.toString();
+            const fps = document.getElementById("fps");
+            if (fps) { fps.innerHTML = j.toString(); }
             await pause();
         }
     }
 
-    function traverseLoopsFrom(data: Uint8Array, width: number, height: number, i: number, j: number) {
+    function traverseLoopsFrom(data: Uint8Array, width: number, i: number, j: number) {
         const idx = (i + 1) + (j + 1) * (width + 2);
         const kind  = data[idx];
         const up    = data[idx - (width + 2)] & 1;
@@ -283,11 +284,12 @@ async function imageToGpuRepresentation(data: Uint8Array, width: number, height:
                 continue;
             }
 
-            traverseLoopsFrom(data, width, height, i, j);
+            traverseLoopsFrom(data, width, i, j);
         }
 
         if (j % 10 == 0) {
-            document.getElementById("fps").innerHTML = j.toString();
+            const fps = document.getElementById("fps");
+            if (fps) { fps.innerHTML = j.toString(); }
             await pause();
         }
     }
@@ -338,6 +340,10 @@ function bootstrapInner(img: HTMLImageElement): [Uint8Array, number, number, num
     canvas.height = height;
 
     const context = canvas.getContext('2d');
+    if (!context) {
+        throw new Error("Canvas2D not supported");
+    }
+
     context.drawImage(img, 0, 0);
     const pixels = context.getImageData(0, 0, width, height).data;
 

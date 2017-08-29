@@ -1,11 +1,17 @@
 {
     "compilerOptions": {
         "outDir": "build",
-        "target": "esnext",
-        "noImplicitAny": true,
-        "removeComments": true,
-        "alwaysStrict": true,
-        "sourceMap": true
+        "forceConsistentCasingInFileNames": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitReturns": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "preserveConstEnums": true,
+        "pretty": true,
+        "removeComments": false,
+        "sourceMap": true,
+        "strict": true,
+        "target": "esnext"
     },
     "files": [
         "src/tutorial.ts",

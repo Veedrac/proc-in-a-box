@@ -168,20 +168,20 @@ export class GpuWiresRenderer {
         }
         gl.disable(gl.BLEND);
 
-        this.renderProgram = this.ctx.createProgram(vs, renderFs);
-        this.a_triangleCoordinates = gl.getAttribLocation (this.renderProgram, "a_triangleCoordinates");
-        this.u_render_scale        = gl.getUniformLocation(this.renderProgram, "u_scale");
-        this.u_render_offset       = gl.getUniformLocation(this.renderProgram, "u_offset");
-        this.u_render_wireStates   = gl.getUniformLocation(this.renderProgram, "u_wireStates");
-        this.u_render_imageDecoder = gl.getUniformLocation(this.renderProgram, "u_imageDecoder");
-        this.u_render_imageDecoderExtra = gl.getUniformLocation(this.renderProgram, "u_imageDecoderExtra");
+        this.renderProgram         = this.ctx.createProgram(vs, renderFs);
+        this.a_triangleCoordinates = gl.getAttribLocation (this.renderProgram, "a_triangleCoordinates")!;
+        this.u_render_scale        = gl.getUniformLocation(this.renderProgram, "u_scale")!;
+        this.u_render_offset       = gl.getUniformLocation(this.renderProgram, "u_offset")!;
+        this.u_render_wireStates   = gl.getUniformLocation(this.renderProgram, "u_wireStates")!;
+        this.u_render_imageDecoder = gl.getUniformLocation(this.renderProgram, "u_imageDecoder")!;
+        this.u_render_imageDecoderExtra = gl.getUniformLocation(this.renderProgram, "u_imageDecoderExtra")!;
 
-        this.stepProgram = this.ctx.createProgram(vs, stepFs);
-        this.u_step_wireStates     = gl.getUniformLocation(this.stepProgram, "u_wireStates");
-        this.u_step_incomingWires  = gl.getUniformLocation(this.stepProgram, "u_incomingWires");
-        this.u_step_incomingWireGroupsOff = gl.getUniformLocation(this.stepProgram, "u_incomingWireGroupsOff");
-        this.u_step_incomingWireGroupsLen = gl.getUniformLocation(this.stepProgram, "u_incomingWireGroupsLen");
-        this.framebuffer = gl.createFramebuffer();
+        this.stepProgram           = this.ctx.createProgram(vs, stepFs);
+        this.u_step_wireStates     = gl.getUniformLocation(this.stepProgram, "u_wireStates")!;
+        this.u_step_incomingWires  = gl.getUniformLocation(this.stepProgram, "u_incomingWires")!;
+        this.u_step_incomingWireGroupsOff = gl.getUniformLocation(this.stepProgram, "u_incomingWireGroupsOff")!;
+        this.u_step_incomingWireGroupsLen = gl.getUniformLocation(this.stepProgram, "u_incomingWireGroupsLen")!;
+        this.framebuffer = gl.createFramebuffer()!;
 
 
         let textureId = 0;
@@ -245,7 +245,7 @@ export class GpuWiresRenderer {
         gl.enableVertexAttribArray(<any>this.a_triangleCoordinates); // TODO: Type safety
     };
 
-    animate(now: number = null) { // TODO: This is getting refactored anyway
+    animate() { // TODO: This is getting refactored anyway
         const gl = this.ctx.gl;
 
         gl.useProgram(this.renderProgram);
@@ -281,11 +281,14 @@ export class GpuWiresRenderer {
         this.n++;
         let now = performance.now();
         if (now - this.t > 100){
-            document.getElementById("fps").innerHTML = (
-                Number.parseFloat(document.getElementById("fps").innerHTML) / 2 + this.n * (1000 / (now - this.t)) / 2
-            ).toString();
-            this.t = now;
-            this.n = 0;
+            const fps = document.getElementById("fps");
+            if (fps) {
+                fps.innerHTML = (
+                    (Number.parseFloat(fps.innerHTML) + this.n * (1000 / (now - this.t))) / 2
+                ).toString();
+                this.t = now;
+                this.n = 0;
+            }
         }
 
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.wireStatesNextTex, 0);
@@ -295,9 +298,9 @@ export class GpuWiresRenderer {
         [this.wireStatesCurrTex, this.wireStatesNextTex] = [this.wireStatesNextTex, this.wireStatesCurrTex];
         [this.wireStatesCurrIdx, this.wireStatesNextIdx] = [this.wireStatesNextIdx, this.wireStatesCurrIdx];
 
-        let newSync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        let newSync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)!;
         if (this.sync.length > 3) {
-            let s = this.sync.shift();
+            let s = this.sync.shift()!;
             while(gl.clientWaitSync(s, 0, 0) == gl.TIMEOUT_EXPIRED) {}
             gl.deleteSync(s);
         }
