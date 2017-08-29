@@ -1,7 +1,6 @@
 {
     "compilerOptions": {
-        "outFile": "src/tutorial.js",
-        "module": "system",
+        "outDir": "build",
         "target": "esnext",
         "noImplicitAny": true,
         "removeComments": true,
