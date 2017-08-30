@@ -6,7 +6,7 @@ const decoder = gpuWiresDecoder;
 const renderer = GpuWiresRenderer;
 
 export class Engine {
-    async load(img: HTMLImageElement) {
+    async load(img) {
         const [width, height] = [img.naturalWidth, img.naturalHeight];
 
         const canvas = document.createElement('canvas');
@@ -16,7 +16,7 @@ export class Engine {
         canvas.style.height = (img.height / 10).toString();
 
         const context = new Gpu(canvas);
-        /* dbg */ (<any>window).context = context;
+        /* dbg */ window.context = context;
 
         const subState = await decoder.bootstrapFromImageTag(img);
         const subRenderer = new renderer(context);

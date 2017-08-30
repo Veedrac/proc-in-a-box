@@ -1,7 +1,5 @@
 export class Gpu {
-    gl: WebGL2RenderingContext;
-
-    constructor(canvas: HTMLCanvasElement) {
+    constructor(canvas) {
         const gl = canvas.getContext("webgl2", {"antialias": false});
         if (!gl) {
             throw new Error("WebGL2 not supported");
@@ -9,7 +7,7 @@ export class Gpu {
         this.gl = gl;
     }
 
-    compileShader(shaderSource: string, kind: number) {
+    compileShader(shaderSource, kind) {
         const shader = this.gl.createShader(kind);
         this.gl.shaderSource(shader, shaderSource);
         this.gl.compileShader(shader);
@@ -20,8 +18,8 @@ export class Gpu {
         return shader;
     }
 
-    createProgram(vertexShader: string, fragmentShader: string): WebGLProgram {
-        const program = this.gl.createProgram()!;
+    createProgram(vertexShader, fragmentShader) {
+        const program = this.gl.createProgram();
 
         this.gl.attachShader(program, this.compileShader(vertexShader, this.gl.VERTEX_SHADER));
         this.gl.attachShader(program, this.compileShader(fragmentShader, this.gl.FRAGMENT_SHADER));
@@ -33,8 +31,8 @@ export class Gpu {
         return program;
     }
 
-    textureCreateAndBind([width, height]: [number, number], internalformat: number, format: number, type: number, pixels: TypedArray | null, disableInterpolation = true): WebGLTexture {
-        const texture = this.gl.createTexture()!;
+    textureCreateAndBind([width, height], internalformat, format, type, pixels, disableInterpolation=true) {
+        const texture = this.gl.createTexture();
         this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
         this.gl.texImage2D(this.gl.TEXTURE_2D, 0, internalformat, width, height, 0, format, type, pixels);
 

@@ -1,5 +1,4 @@
 import { Gpu } from './gpu';
-import { GpuRepresentation } from './gpu-wires-decoder';
 
 const vs = `#version 300 es
     precision mediump float;
@@ -106,46 +105,7 @@ const stepFs = `#version 300 es
 `;
 
 export class GpuWiresRenderer {
-    ctx: Gpu;
-    width: number;
-    height: number;
-    numWires: number;
-
-    n: number;
-    t: number;
-    sync: WebGLSync[];
-
-    scale: number;
-    mul: number;
-    offset: number;
-
-    renderProgram: WebGLProgram;
-    a_triangleCoordinates: WebGLUniformLocation;
-    u_render_scale: WebGLUniformLocation;
-    u_render_offset: WebGLUniformLocation;
-    u_render_wireStates: WebGLUniformLocation;
-    u_render_imageDecoder: WebGLUniformLocation;
-    u_render_imageDecoderExtra: WebGLUniformLocation;
-
-    stepProgram: WebGLProgram;
-    u_step_wireStates: WebGLUniformLocation;
-    u_step_incomingWires: WebGLUniformLocation;
-    u_step_incomingWireGroupsOff: WebGLUniformLocation;
-    u_step_incomingWireGroupsLen: WebGLUniformLocation;
-    framebuffer: WebGLUniformLocation;
-
-    imageDecoderIdx: number;
-    imageDecoderExtraIdx: number;
-    incomingWiresIdx: number;
-    incomingWireGroupsOffIdx: number;
-    incomingWireGroupsLenIdx: number;
-
-    wireStatesCurrTex: WebGLTexture;
-    wireStatesCurrIdx: number;
-    wireStatesNextTex: WebGLTexture;
-    wireStatesNextIdx: number;
-
-    constructor(ctx: Gpu) {
+    constructor(ctx) {
         this.ctx = ctx;
 
         this.sync = [];
@@ -157,7 +117,7 @@ export class GpuWiresRenderer {
         this.offset = 0;
     }
 
-    async initialize(width: number, height: number, graph: GpuRepresentation) {
+    async initialize(width, height, graph) {
         const gl = this.ctx.gl;
         this.width = width;
         this.height = height;
@@ -169,19 +129,19 @@ export class GpuWiresRenderer {
         gl.disable(gl.BLEND);
 
         this.renderProgram         = this.ctx.createProgram(vs, renderFs);
-        this.a_triangleCoordinates = gl.getAttribLocation (this.renderProgram, "a_triangleCoordinates")!;
-        this.u_render_scale        = gl.getUniformLocation(this.renderProgram, "u_scale")!;
-        this.u_render_offset       = gl.getUniformLocation(this.renderProgram, "u_offset")!;
-        this.u_render_wireStates   = gl.getUniformLocation(this.renderProgram, "u_wireStates")!;
-        this.u_render_imageDecoder = gl.getUniformLocation(this.renderProgram, "u_imageDecoder")!;
-        this.u_render_imageDecoderExtra = gl.getUniformLocation(this.renderProgram, "u_imageDecoderExtra")!;
+        this.a_triangleCoordinates = gl.getAttribLocation (this.renderProgram, "a_triangleCoordinates");
+        this.u_render_scale        = gl.getUniformLocation(this.renderProgram, "u_scale");
+        this.u_render_offset       = gl.getUniformLocation(this.renderProgram, "u_offset");
+        this.u_render_wireStates   = gl.getUniformLocation(this.renderProgram, "u_wireStates");
+        this.u_render_imageDecoder = gl.getUniformLocation(this.renderProgram, "u_imageDecoder");
+        this.u_render_imageDecoderExtra = gl.getUniformLocation(this.renderProgram, "u_imageDecoderExtra");
 
         this.stepProgram           = this.ctx.createProgram(vs, stepFs);
-        this.u_step_wireStates     = gl.getUniformLocation(this.stepProgram, "u_wireStates")!;
-        this.u_step_incomingWires  = gl.getUniformLocation(this.stepProgram, "u_incomingWires")!;
-        this.u_step_incomingWireGroupsOff = gl.getUniformLocation(this.stepProgram, "u_incomingWireGroupsOff")!;
-        this.u_step_incomingWireGroupsLen = gl.getUniformLocation(this.stepProgram, "u_incomingWireGroupsLen")!;
-        this.framebuffer = gl.createFramebuffer()!;
+        this.u_step_wireStates     = gl.getUniformLocation(this.stepProgram, "u_wireStates");
+        this.u_step_incomingWires  = gl.getUniformLocation(this.stepProgram, "u_incomingWires");
+        this.u_step_incomingWireGroupsOff = gl.getUniformLocation(this.stepProgram, "u_incomingWireGroupsOff");
+        this.u_step_incomingWireGroupsLen = gl.getUniformLocation(this.stepProgram, "u_incomingWireGroupsLen");
+        this.framebuffer = gl.createFramebuffer();
 
 
         let textureId = 0;
@@ -241,8 +201,8 @@ export class GpuWiresRenderer {
         const triangleCoveringBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, triangleCoveringBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, triangleCovering, gl.STATIC_DRAW);
-        gl.vertexAttribPointer(<any>this.a_triangleCoordinates, 2, gl.FLOAT, false, 0, 0); // TODO: Type safety
-        gl.enableVertexAttribArray(<any>this.a_triangleCoordinates); // TODO: Type safety
+        gl.vertexAttribPointer(this.a_triangleCoordinates, 2, gl.FLOAT, false, 0, 0); // TODO: Type safety
+        gl.enableVertexAttribArray(this.a_triangleCoordinates); // TODO: Type safety
     };
 
     animate() { // TODO: This is getting refactored anyway
@@ -298,9 +258,9 @@ export class GpuWiresRenderer {
         [this.wireStatesCurrTex, this.wireStatesNextTex] = [this.wireStatesNextTex, this.wireStatesCurrTex];
         [this.wireStatesCurrIdx, this.wireStatesNextIdx] = [this.wireStatesNextIdx, this.wireStatesCurrIdx];
 
-        let newSync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)!;
+        let newSync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
         if (this.sync.length > 3) {
-            let s = this.sync.shift()!;
+            let s = this.sync.shift();
             while(gl.clientWaitSync(s, 0, 0) == gl.TIMEOUT_EXPIRED) {}
             gl.deleteSync(s);
         }

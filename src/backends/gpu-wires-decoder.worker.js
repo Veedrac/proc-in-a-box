@@ -1,15 +1,8 @@
+// TODO
+
 import { pause } from '../utils/setZeroTimeout';
 
-export interface GpuRepresentation {
-    wireStates: Uint8Array;
-    incomingWires: Uint32Array;
-    incomingWireGroupsOff: Uint32Array;
-    incomingWireGroupsLen: Uint8Array;
-    imageDecoder: Uint32Array;
-    imageDecoderExtra: Uint32Array;
-}
-
-function getKind(data: Uint8ClampedArray, idx: number) {
+const getKind = function(data, idx) {
     const r = data[idx + 0];
     const g = data[idx + 1];
     const b = data[idx + 2];
@@ -41,7 +34,7 @@ function getKind(data: Uint8ClampedArray, idx: number) {
     return 0b00;
 }
 
-async function imageToGpuRepresentation(data: Uint8Array, width: number, height: number, numWires: number): Promise<GpuRepresentation> {
+const imageToGpuRepresentation = async function(data, width, height, numWires) {
     // Loops aside, trace *only* from ends.
     // No stack is needed for this, since it's always a
     // single one-way traversal.
@@ -87,7 +80,7 @@ async function imageToGpuRepresentation(data: Uint8Array, width: number, height:
     // at most once every four wires.
     const imageDecoderExtra = new Uint32Array(Math.ceil(size >> 2));
 
-    function traverseFrom(data: Uint8Array, width: number, i: number, j: number) {
+    const traverseFrom = function(data, width, i, j) {
         const idx = (i + 1) + (j + 1) * (width + 2);
         const kind  = data[idx];
         const up    = data[idx - (width + 2)] & 1;
@@ -198,7 +191,7 @@ async function imageToGpuRepresentation(data: Uint8Array, width: number, height:
         }
     }
 
-    function traverseLoopsFrom(data: Uint8Array, width: number, i: number, j: number) {
+    const traverseLoopsFrom = function(data, width, i, j) {
         const idx = (i + 1) + (j + 1) * (width + 2);
         const kind  = data[idx];
         const up    = data[idx - (width + 2)] & 1;
@@ -331,7 +324,7 @@ async function imageToGpuRepresentation(data: Uint8Array, width: number, height:
     };
 }
 
-function bootstrapInner(img: HTMLImageElement): [Uint8Array, number, number, number] {
+const bootstrapInner = function(img) {
     const width = img.naturalWidth;
     const height = img.naturalHeight;
 
@@ -361,7 +354,7 @@ function bootstrapInner(img: HTMLImageElement): [Uint8Array, number, number, num
     return [predecoded, width, height, numWires];
 }
 
-export function bootstrapFromImageTag(img: HTMLImageElement) {
+const bootstrapFromImageTag = function(img) {
     // Extract to allow collections of temporaries.
     const [predecoded, width, height, numWires] = bootstrapInner(img);
     return imageToGpuRepresentation(predecoded, width, height, numWires);

@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "outDir": "build",
+        "outDir": "../build",
         "forceConsistentCasingInFileNames": true,
         "noFallthroughCasesInSwitch": true,
         "noImplicitReturns": true,
@@ -14,7 +14,7 @@
         "target": "esnext"
     },
     "files": [
-        "src/tutorial.ts",
-        "src/definitions.ts"
+        "../src/tutorial.ts",
+        "../src/definitions.ts"
     ]
 }
