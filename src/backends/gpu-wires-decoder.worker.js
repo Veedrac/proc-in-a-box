@@ -1,40 +1,5 @@
-// TODO
-
-import { pause } from '../utils/setZeroTimeout';
-
-const getKind = function(data, idx) {
-    const r = data[idx + 0];
-    const g = data[idx + 1];
-    const b = data[idx + 2];
-    const rgb = (r << 16) | (g << 8) | (b << 0);
-
-    // LineLogic 2 includes protection and
-    // goals. Protection and wires are orthogonal,
-    // whereas a goal is *always* accompanied
-    // by a protected wire.
-    //
-    // Goals do not seem worth the implementation
-    // effort; avoiding any cost to the GPU
-    // iteration is likely to be non-trivial.
-    // Protection is easy, but I'm unconvinced
-    // that it's worthwhile, and it would be
-    // deprecated by a higher-level UI anyway.
-
-    // no signal (wire, goal, protected wire)
-    if ((rgb === 0x0080FF) || rgb === 0x800000 || rgb === 0x00FFFF) {
-        return 0b01;
-    }
-
-    // signal, any direction (wire or goal, protected wire)
-    if ((rgb & 0xFF7FF0) === 0xFF0000 || (rgb & 0xFFFFF0) === 0xFFFF00) {
-        return 0b11;
-    }
-
-    // no wire, anything else
-    return 0b00;
-}
-
-const imageToGpuRepresentation = async function(data, width, height, numWires) {
+onmessage = function(event) {
+    let [data, width, height, numWires] = event.data;
     // Loops aside, trace *only* from ends.
     // No stack is needed for this, since it's always a
     // single one-way traversal.
@@ -64,13 +29,13 @@ const imageToGpuRepresentation = async function(data, width, height, numWires) {
     // The preallocated length is massively pessimistic.
     // An extra state is reserved at the beginning to dump state into.
     let wireStatesN = 1;
-    const wireStates = new Uint8Array(numWires);
+    let wireStates = new Uint8Array(numWires);
 
     // TODO
     let incomingWiresN = 0;
-    const incomingWires = new Uint32Array(numWires * 2);
-    const incomingWireGroupsOff = new Uint32Array(numWires >> 3);
-    const incomingWireGroupsLen = new Uint8Array(numWires);
+    let incomingWires = new Uint32Array(numWires * 2);
+    let incomingWireGroupsOff = new Uint32Array(numWires >> 3);
+    let incomingWireGroupsLen = new Uint8Array(numWires);
 
     // Which wire does each pixel get its value from?
     const imageDecoder = new Uint32Array(size);
@@ -184,11 +149,7 @@ const imageToGpuRepresentation = async function(data, width, height, numWires) {
             traverseFrom(data, width, i, j);
         }
 
-        if (j % 10 == 0) {
-            const fps = document.getElementById("fps");
-            if (fps) { fps.innerHTML = j.toString(); }
-            await pause();
-        }
+        postMessage(["frame", j]);
     }
 
     const traverseLoopsFrom = function(data, width, i, j) {
@@ -280,11 +241,7 @@ const imageToGpuRepresentation = async function(data, width, height, numWires) {
             traverseLoopsFrom(data, width, i, j);
         }
 
-        if (j % 10 == 0) {
-            const fps = document.getElementById("fps");
-            if (fps) { fps.innerHTML = j.toString(); }
-            await pause();
-        }
+        postMessage(["frame", j]);
     }
 
     for (let i = 0; i < incomingWiresN; i++) {
@@ -314,48 +271,14 @@ const imageToGpuRepresentation = async function(data, width, height, numWires) {
         }
     }
 
-    return {
-        wireStates: packedWireStates,
-        incomingWires: incomingWires.slice(0, incomingWiresN),
-        incomingWireGroupsOff: incomingWireGroupsOff.slice(0, wireStatesN >> 3),
-        incomingWireGroupsLen: incomingWireGroupsLen.slice(0, wireStatesN),
-        imageDecoder: imageDecoder,
-        imageDecoderExtra: imageDecoderExtra
-    };
-}
+    // Return
+    wireStates = packedWireStates;
+    incomingWires = incomingWires.slice(0, incomingWiresN);
+    incomingWireGroupsOff = incomingWireGroupsOff.slice(0, wireStatesN >> 3);
+    incomingWireGroupsLen = incomingWireGroupsLen.slice(0, wireStatesN);
 
-const bootstrapInner = function(img) {
-    const width = img.naturalWidth;
-    const height = img.naturalHeight;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-
-    const context = canvas.getContext('2d');
-    if (!context) {
-        throw new Error("Canvas2D not supported");
-    }
-
-    context.drawImage(img, 0, 0);
-    const pixels = context.getImageData(0, 0, width, height).data;
-
-    let numWires = 0;
-    const predecoded = new Uint8Array((width + 2) * (height + 2));
-    for (let j = 0; j < height; j++) {
-        for (let i = 0; i < width; i++) {
-            const kind = getKind(pixels, (i + (height - 1 - j) * width) * 4);
-            numWires += kind === 0 ? 0 : 1;
-            predecoded[(i + 1) + (j + 1) * (width + 2)] = kind;
-            predecoded[(i + 1) + (j + 1) * (width + 2)] = kind;
-        }
-    }
-
-    return [predecoded, width, height, numWires];
-}
-
-const bootstrapFromImageTag = function(img) {
-    // Extract to allow collections of temporaries.
-    const [predecoded, width, height, numWires] = bootstrapInner(img);
-    return imageToGpuRepresentation(predecoded, width, height, numWires);
+    postMessage(
+        ["finish", {wireStates, incomingWires, incomingWireGroupsOff, incomingWireGroupsLen, imageDecoder, imageDecoderExtra}],
+        [wireStates.buffer, incomingWires.buffer, incomingWireGroupsOff.buffer, incomingWireGroupsLen.buffer, imageDecoder.buffer, imageDecoderExtra.buffer]
+    );
 }

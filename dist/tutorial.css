@@ -1,0 +1,13 @@
+canvas, img {
+    image-rendering: optimizeSpeed;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: optimize-contrast;
+}
+
+@media (min-resolution: 1dppx) {
+    canvas, img {
+        image-rendering: pixelated;
+        -ms-interpolation-mode: nearest-neighbor;
+    }
+}
