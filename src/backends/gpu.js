@@ -5,6 +5,7 @@ export class Gpu {
             throw new Error("WebGL2 not supported");
         }
         this.gl = gl;
+        this.syncQueue = [];
     }
 
     compileShader(shaderSource, kind) {
@@ -49,5 +50,15 @@ export class Gpu {
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+    }
+
+    sync() {
+        let newSync = this.gl.fenceSync(this.gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (this.syncQueue.length > 3) {
+            let s = this.syncQueue.shift();
+            while(this.gl.clientWaitSync(s, 0, 0) == this.gl.TIMEOUT_EXPIRED) {}
+            this.gl.deleteSync(s);
+        }
+        this.syncQueue.push(newSync);
     }
 };

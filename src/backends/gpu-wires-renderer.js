@@ -111,10 +111,6 @@ export class GpuWiresRenderer {
         this.sync = [];
         this.n = 0;
         this.t = performance.now();
-
-        this.scale = 1;
-        this.mul = 1.003;
-        this.offset = 0;
     }
 
     async initialize(width, height, graph) {
@@ -205,27 +201,19 @@ export class GpuWiresRenderer {
         gl.enableVertexAttribArray(this.a_triangleCoordinates); // TODO: Type safety
     };
 
-    animate() { // TODO: This is getting refactored anyway
+    render(scale, offset) { // TODO: This is getting refactored anyway
         const gl = this.ctx.gl;
 
         gl.useProgram(this.renderProgram);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, this.width, this.height);
-        gl.uniform1f(this.u_render_scale, this.scale);
-        gl.uniform2f(this.u_render_offset, this.offset, this.offset);
+        gl.uniform1f(this.u_render_scale, scale);
+        gl.uniform2f(this.u_render_offset, ...offset);
         gl.uniform1i(this.u_render_wireStates, this.wireStatesCurrIdx);
         gl.uniform1i(this.u_render_imageDecoder, this.imageDecoderIdx);
         gl.uniform1i(this.u_render_imageDecoderExtra, this.imageDecoderExtraIdx);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-        this.offset += 4 * this.scale;
-        this.scale *= this.mul;
-        if (this.scale > 1) {
-            this.mul = 0.9999 / this.mul;
-        } else if (this.scale < 0.1) {
-            this.mul = 1.0001 / this.mul;
-        }
 
         gl.useProgram(this.stepProgram);
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
@@ -238,32 +226,11 @@ export class GpuWiresRenderer {
     step() {
         const gl = this.ctx.gl;
 
-        this.n++;
-        let now = performance.now();
-        if (now - this.t > 100){
-            const fps = document.getElementById("fps");
-            if (fps) {
-                fps.innerHTML = (
-                    (Number.parseFloat(fps.innerHTML) + this.n * (1000 / (now - this.t))) / 2
-                ).toString();
-                this.t = now;
-                this.n = 0;
-            }
-        }
-
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.wireStatesNextTex, 0);
         gl.uniform1i(this.u_step_wireStates, this.wireStatesCurrIdx);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
         [this.wireStatesCurrTex, this.wireStatesNextTex] = [this.wireStatesNextTex, this.wireStatesCurrTex];
         [this.wireStatesCurrIdx, this.wireStatesNextIdx] = [this.wireStatesNextIdx, this.wireStatesCurrIdx];
-
-        let newSync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
-        if (this.sync.length > 3) {
-            let s = this.sync.shift();
-            while(gl.clientWaitSync(s, 0, 0) == gl.TIMEOUT_EXPIRED) {}
-            gl.deleteSync(s);
-        }
-        this.sync.push(newSync);
     }
 };

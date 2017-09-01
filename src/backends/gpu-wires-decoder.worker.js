@@ -281,4 +281,5 @@ onmessage = function(event) {
         ["finish", {wireStates, incomingWires, incomingWireGroupsOff, incomingWireGroupsLen, imageDecoder, imageDecoderExtra}],
         [wireStates.buffer, incomingWires.buffer, incomingWireGroupsOff.buffer, incomingWireGroupsLen.buffer, imageDecoder.buffer, imageDecoderExtra.buffer]
     );
+    close();
 }

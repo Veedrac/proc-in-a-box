@@ -8,6 +8,7 @@ class Gpu {
             throw new Error("WebGL2 not supported");
         }
         this.gl = gl;
+        this.syncQueue = [];
     }
 
     compileShader(shaderSource, kind) {
@@ -52,6 +53,16 @@ class Gpu {
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+    }
+
+    sync() {
+        let newSync = this.gl.fenceSync(this.gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (this.syncQueue.length > 3) {
+            let s = this.syncQueue.shift();
+            while(this.gl.clientWaitSync(s, 0, 0) == this.gl.TIMEOUT_EXPIRED) {}
+            this.gl.deleteSync(s);
+        }
+        this.syncQueue.push(newSync);
     }
 }
 
@@ -262,10 +273,6 @@ class GpuWiresRenderer {
         this.sync = [];
         this.n = 0;
         this.t = performance.now();
-
-        this.scale = 1;
-        this.mul = 1.003;
-        this.offset = 0;
     }
 
     async initialize(width, height, graph) {
@@ -356,27 +363,19 @@ class GpuWiresRenderer {
         gl.enableVertexAttribArray(this.a_triangleCoordinates); // TODO: Type safety
     };
 
-    animate() { // TODO: This is getting refactored anyway
+    render(scale, offset) { // TODO: This is getting refactored anyway
         const gl = this.ctx.gl;
 
         gl.useProgram(this.renderProgram);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, this.width, this.height);
-        gl.uniform1f(this.u_render_scale, this.scale);
-        gl.uniform2f(this.u_render_offset, this.offset, this.offset);
+        gl.uniform1f(this.u_render_scale, scale);
+        gl.uniform2f(this.u_render_offset, ...offset);
         gl.uniform1i(this.u_render_wireStates, this.wireStatesCurrIdx);
         gl.uniform1i(this.u_render_imageDecoder, this.imageDecoderIdx);
         gl.uniform1i(this.u_render_imageDecoderExtra, this.imageDecoderExtraIdx);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-        this.offset += 4 * this.scale;
-        this.scale *= this.mul;
-        if (this.scale > 1) {
-            this.mul = 0.9999 / this.mul;
-        } else if (this.scale < 0.1) {
-            this.mul = 1.0001 / this.mul;
-        }
 
         gl.useProgram(this.stepProgram);
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
@@ -389,41 +388,25 @@ class GpuWiresRenderer {
     step() {
         const gl = this.ctx.gl;
 
-        this.n++;
-        let now = performance.now();
-        if (now - this.t > 100){
-            const fps = document.getElementById("fps");
-            if (fps) {
-                fps.innerHTML = (
-                    (Number.parseFloat(fps.innerHTML) + this.n * (1000 / (now - this.t))) / 2
-                ).toString();
-                this.t = now;
-                this.n = 0;
-            }
-        }
-
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.wireStatesNextTex, 0);
         gl.uniform1i(this.u_step_wireStates, this.wireStatesCurrIdx);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
         [this.wireStatesCurrTex, this.wireStatesNextTex] = [this.wireStatesNextTex, this.wireStatesCurrTex];
         [this.wireStatesCurrIdx, this.wireStatesNextIdx] = [this.wireStatesNextIdx, this.wireStatesCurrIdx];
-
-        let newSync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
-        if (this.sync.length > 3) {
-            let s = this.sync.shift();
-            while(gl.clientWaitSync(s, 0, 0) == gl.TIMEOUT_EXPIRED) {}
-            gl.deleteSync(s);
-        }
-        this.sync.push(newSync);
     }
 }
 
 const decoder = gpuWiresDecoder;
-const renderer = GpuWiresRenderer;
+const Renderer = GpuWiresRenderer;
 
-class Engine {
-    async load(img) {
+class Frame {
+    constructor(ctx, renderer) {
+        this.ctx = ctx;
+        this.renderer = renderer;
+    }
+
+    static async load(img) {
         const [width, height] = [img.naturalWidth, img.naturalHeight];
 
         const canvas = document.createElement('canvas');
@@ -432,22 +415,53 @@ class Engine {
         canvas.style.width = (img.width / 10).toString();
         canvas.style.height = (img.height / 10).toString();
 
-        const context = new Gpu(canvas);
-        /* dbg */ window.context = context;
+        const ctx = new Gpu(canvas);
 
         const subState = await decoder.bootstrapFromImageTag(img);
-        const subRenderer = new renderer(context);
+        const subRenderer = new Renderer(ctx);
         subRenderer.initialize(width, height, subState);
 
-        subRenderer.animate();
-        img.replaceWith(canvas);
-        subRenderer.step();
-        // requestIdleCallback(subRenderer.step);
-        // while (deadline.timeRemaining() > 0.6) {
-    };
+        const frame = new Frame(ctx, subRenderer);
+        frame.render();
+
+        return {canvas, frame};
+    }
+
+    render() {
+        this.renderer.render(1, [0, 0]);
+        this.ctx.sync();
+    }
+
+    update() {
+        this.renderer.step();
+    }
 }
 
-const scheduler = new Engine();
+class Engine {
+    constructor() {
+        this.frames = [];
+    }
+
+    async load(img) {
+        const {canvas, frame} = await Frame.load(img);
+        img.replaceWith(canvas);
+        this.frames.push(frame);
+    }
+
+    render() {
+        for (let frame of this.frames) {
+            frame.render();
+        }
+    }
+
+    update() {
+        for (let frame of this.frames) {
+            frame.update();
+        }
+    }
+}
+
+const engine = new Engine();
 
 const linelogic_area = document.getElementsByClassName("linelogic");
 for (var i = 0; i < linelogic_area.length; i++) {
@@ -457,11 +471,23 @@ for (var i = 0; i < linelogic_area.length; i++) {
     }
 
     if (area.complete) {
-        setTimeout(() => scheduler.load(area), 0);
+        setTimeout(() => engine.load(area), 0);
     } else {
-        area.onload = () => scheduler.load(area);
+        area.onload = () => engine.load(area);
     }
 }
+
+const renderAll = function() {
+    engine.render();
+    requestAnimationFrame(renderAll);
+};
+requestAnimationFrame(renderAll);
+
+const update = function(deadline) {
+    engine.update();
+    requestIdleCallback(update);
+};
+requestIdleCallback(update);
 
 }());
 //# sourceMappingURL=tutorial.js.map
